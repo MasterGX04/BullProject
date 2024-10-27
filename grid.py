@@ -88,15 +88,15 @@ def animate(frame):
     # Check if the bull reaches the target
     if bullPosition == [center, center]:
         print("The bull has reached the target!")
-        plt.text(0.5, 0.5, "The bull has reached the target!", fontsize=18, ha='center', transform=plt.gcf().transFigure)
+        text = plt.text(0.5, 0.5, "The bull has reached the target!", fontsize=18, ha='center', transform=plt.gcf().transFigure)
         plt.gca().figure.canvas.stop_event_loop()
-        return
+        return [text]
 
     if robotPosition == bullPosition:
         print("The robot has died to the bull!")
-        plt.text(0.5, 0.5, "The robot has died to the bull!", fontsize=18, ha='center', transform=plt.gcf().transFigure)
+        text = plt.text(0.5, 0.5, "The robot has died to the bull!", fontsize=18, ha='center', transform=plt.gcf().transFigure)
         plt.gca().figure.canvas.stop_event_loop()
-        return
+        return [text]
 
     # Move robot and bull
     moveRobot(robotPosition, bullPosition, obstacles, corralWalls, corralPositions)

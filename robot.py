@@ -2,6 +2,7 @@ from grid_size import GRID_SIZE
 from collections import deque
 from bull import isWithin5x5Square
 ROBOT_MOVES = [(0, 1), (0, -1), (1, 0), (-1, 0), (1, 1), (-1, -1), (1, -1), (-1, 1)]
+DIAGONAL_MOVES = [(-1, -1), (-1, 1), (1, -1), (1, 1)]
 
 def manhattanDistance(pos1, pos2):
     return abs(pos1[0] - pos2[0]) + abs(pos1[1] - pos2[1])
@@ -17,6 +18,17 @@ def computeTStar(robotPosition, targetPosition, obstacles, corralPositions):
     queue = deque([(robotPosition, 0)])  # Queue holds (position, distance) tuples
     visited = set([tuple(robotPosition)])  # Track visited positions to avoid cycles
 
+    state = (tuple(robotPosition), tuple(targetPosition))
+    if state in tStarCache:
+        return tStarCache[state]
+    
+    adjacentToTarget = {
+        (targetPosition[0] - 1, targetPosition[1]),  # Up
+        (targetPosition[0] + 1, targetPosition[1]),  # Down
+        (targetPosition[0], targetPosition[1] - 1),  # Left
+        (targetPosition[0], targetPosition[1] + 1),  # Right
+    }
+    
     while queue:
         currentPosition, distance = queue.popleft()
         
@@ -26,15 +38,17 @@ def computeTStar(robotPosition, targetPosition, obstacles, corralPositions):
             nextPosition = (newRobotX, newRobotY)
 
             if nextPosition == tuple(targetPosition):
+                tStarCache[state] = distance + 1
                 return distance + 1  # Reached the target
             
             if (0 <= newRobotX < GRID_SIZE) and (0 <= newRobotY < GRID_SIZE) and \
                nextPosition not in obstacles and nextPosition not in corralPositions and \
-               nextPosition not in visited:
+               nextPosition not in adjacentToTarget and nextPosition not in visited:
                 
                 visited.add(nextPosition)
                 queue.append((nextPosition, distance + 1))
     
+    tStarCache[state] = 10000
     return 10000  # If target is unreachable, return high value
 
 # Movement logic for robot
@@ -54,6 +68,29 @@ def moveRobot(robotPosition, bullPosition, obstacles, corralWalls, corralPositio
                 robotPosition[0], robotPosition[1] = newRobotX, newRobotY
                 return  # Exit immediately after moving out of corral
     
+    # Check if the bull is directly adjacent to the robot (danger zone)
+    bullAdjacent = bullAdjacent = (abs(bullPosition[0] - robotPosition[0]) <= 1) and (abs(bullPosition[1] - robotPosition[1]) <= 1)
+                   
+    if bullAdjacent:
+        for move in DIAGONAL_MOVES:
+            newRobotX = robotPosition[0] + move[0]
+            newRobotY = robotPosition[1] + move[1]
+            
+            # Calculate the new position
+            newPosition = (newRobotX, newRobotY)
+
+            # Ensure the move is within bounds, avoids obstacles, corral, and bull’s position
+            if (0 <= newRobotX < GRID_SIZE) and (0 <= newRobotY < GRID_SIZE) and \
+               newPosition not in obstacles and newPosition not in corralWalls and \
+               newPosition not in corralPositions and newPosition != tuple(bullPosition):
+                
+                # Additional check: Ensure the new position won’t make the robot adjacent to the bull
+                # after the diagonal move
+                if abs(newRobotX - bullPosition[0]) > 1 or abs(newRobotY - bullPosition[1]) > 1:
+                    # Apply the safe diagonal move
+                    robotPosition[0], robotPosition[1] = newRobotX, newRobotY
+                    return  # Exit after making the diagonal move
+            
     # If robot is not within bull's 5x5 move towards bull
     if not isWithin5x5Square(bullPosition, robotPosition):
         target = bullPosition

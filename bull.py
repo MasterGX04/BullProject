@@ -27,7 +27,7 @@ def moveBull(bullPosition, robotPosition, obstacles, corralPositions):
             newBullY = bullY + move[1]
             newPosition = [newBullX, newBullY]
             #Ensure bull moves to robot
-            if (0 <= newBullX < GRID_SIZE and 0 <= newBullY < GRID_SIZE) and (newBullX, newBullY) not in obstacles and newPosition != robotPosition:
+            if (0 <= newBullX < GRID_SIZE and 0 <= newBullY < GRID_SIZE) and (newBullX, newBullY) not in obstacles:
                # Check if this move maintains or decreases the distance to the robot
                 if manhattanDistance(newPosition, robotPosition) <= manhattanDistance(bullPosition, robotPosition):
                     possibleMoves.append(move)
