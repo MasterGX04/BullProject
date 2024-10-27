@@ -1,5 +1,6 @@
-import random
 from grid_size import GRID_SIZE
+from collections import deque
+from bull import isWithin5x5Square
 ROBOT_MOVES = [(0, 1), (0, -1), (1, 0), (-1, 0), (1, 1), (-1, -1), (1, -1), (-1, 1)]
 
 def manhattanDistance(pos1, pos2):
@@ -9,48 +10,35 @@ def manhattanDistance(pos1, pos2):
 tStarCache = {}
 
 # Recursive function to compute T* for given bull and robot position
-def computeTStar(bullPosition, robotPosition, targetPosition, obstacles, corralPositions, maxDepth=50, depth=0):
-    if depth > maxDepth:
-        return float('inf')
-    
-    # Base case: If the robot reaches the target position, T* is zero
+def computeTStar(robotPosition, targetPosition, obstacles, corralPositions):
     if robotPosition == targetPosition:
         return 0
 
-    # Checks if result is cached    
-    state = (bullPosition[0], bullPosition[1], robotPosition[0], robotPosition[1])
-    if state in tStarCache:
-        return tStarCache[state]
-    
-    # Initialize the minimal T* value
-    bestTStar = None
+    queue = deque([(robotPosition, 0)])  # Queue holds (position, distance) tuples
+    visited = set([tuple(robotPosition)])  # Track visited positions to avoid cycles
 
-    # Explore all possible moves for the robot
-    for move in ROBOT_MOVES:
-        newRobotX = robotPosition[0] + move[0]
-        newRobotY = robotPosition[1] + move[1]
+    while queue:
+        currentPosition, distance = queue.popleft()
+        
+        for move in ROBOT_MOVES:
+            newRobotX = currentPosition[0] + move[0]
+            newRobotY = currentPosition[1] + move[1]
+            nextPosition = (newRobotX, newRobotY)
 
-        # Check if the move is within bounds and avoids obstacles and corral positions
-        if (0 <= newRobotX < GRID_SIZE) and (0 <= newRobotY < GRID_SIZE) and \
-           (newRobotX, newRobotY) not in obstacles and (newRobotX, newRobotY) not in corralPositions:
+            if nextPosition == tuple(targetPosition):
+                return distance + 1  # Reached the target
             
-            # Next position for the robot after this move
-            nextRobotPosition = [newRobotX, newRobotY]
-
-            # Recursively calculate T* for the new position
-            tStarValue = 1 + computeTStar(bullPosition, nextRobotPosition, targetPosition, obstacles, corralPositions, maxDepth, depth + 1)
-            
-            # Track the minimum T* value across possible moves
-            if bestTStar is None or tStarValue < bestTStar:
-                bestTStar = tStarValue
+            if (0 <= newRobotX < GRID_SIZE) and (0 <= newRobotY < GRID_SIZE) and \
+               nextPosition not in obstacles and nextPosition not in corralPositions and \
+               nextPosition not in visited:
                 
-    bestTStar = bestTStar if bestTStar is not None else float('inf')
-    return bestTStar
+                visited.add(nextPosition)
+                queue.append((nextPosition, distance + 1))
+    
+    return 10000  # If target is unreachable, return high value
 
 # Movement logic for robot
-def moveRobot(robotPosition, bullPosition, targetPosition, obstacles, corralPositions):    
-    global tStarCache
-    tStarCache.clear()
+def moveRobot(robotPosition, bullPosition, obstacles, corralWalls, corralPositions):    
     
     # Robot will move out of corral if it accidentally goes inside
     if tuple(robotPosition) in corralPositions:
@@ -61,21 +49,21 @@ def moveRobot(robotPosition, bullPosition, targetPosition, obstacles, corralPosi
             
             # Ensure new position is within bounds, not an obstacle, and outside the corral
             if (0 <= newRobotX < GRID_SIZE) and (0 <= newRobotY < GRID_SIZE) and \
-               (newRobotX, newRobotY) not in obstacles and (newRobotX, newRobotY) not in corralPositions:
+               (newRobotX, newRobotY) not in obstacles and (newRobotX, newRobotY) not in corralPositions \
+                (newRobotX, newRobotY) not in corralWalls:
                 robotPosition[0], robotPosition[1] = newRobotX, newRobotY
-                print(f"Robot moved out of corral to position: {robotPosition}")
                 return  # Exit immediately after moving out of corral
     
     # If robot is not within bull's 5x5 move towards bull
-    if manhattanDistance(bullPosition, robotPosition) > 5:
+    if not isWithin5x5Square(bullPosition, robotPosition):
         target = bullPosition
     else:
-        target = targetPosition
-
+        target = nearestCorralWall(robotPosition, corralWalls)
     
     # Calculate robot's movement strategy by trying to move towards target
     bestMove = None
     bestTStar = float('inf')
+    safeMoves = []
     
     for move in ROBOT_MOVES:
         newRobotX = robotPosition[0] + move[0]
@@ -83,17 +71,29 @@ def moveRobot(robotPosition, bullPosition, targetPosition, obstacles, corralPosi
         if (0 <= newRobotX < GRID_SIZE) and (0 <= newRobotY < GRID_SIZE) and \
            (newRobotX, newRobotY) not in obstacles and (newRobotX, newRobotY) not in corralPositions:
             
+            if (newRobotX, newRobotY) != tuple(bullPosition):
+                safeMoves.append((move, newRobotX, newRobotY))
+                
             # Compute T* for this potential move
-            tStarValue = computeTStar(bullPosition, [newRobotX, newRobotY], target, obstacles, corralPositions)
-            print(f"Tstar value: {tStarValue}")
-            
+            tStarValue = computeTStar([newRobotX, newRobotY], target, obstacles, corralPositions)
+            #print(f'tStar Value for {move}: {tStarValue}')
             # Track the move that minimizes T*
             if tStarValue < bestTStar:
                 bestMove = move
                 bestTStar = tStarValue
                 
-        # Apply best move if iti exists
-    if bestMove:
+    # Apply best move if iti exists
+    if safeMoves:
+        bestSafeMove = min(safeMoves, key=lambda m: computeTStar([m[1], m[2]], target, obstacles, corralPositions))
+        robotPosition[0] += bestSafeMove[0][0]
+        robotPosition[1] += bestSafeMove[0][1]
+    elif bestMove:
+        # If no safe moves exist, use the best available move to minimize T*
         robotPosition[0] += bestMove[0]
         robotPosition[1] += bestMove[1]
-# end moveRobot                 
+# end moveRobot               
+
+# Helper function to find the nearest corral wall cell as the robot's target
+def nearestCorralWall(robotPosition, corralWalls):
+    nearestWall = min(corralWalls, key=lambda pos: manhattanDistance(robotPosition, pos))
+    return nearestWall  

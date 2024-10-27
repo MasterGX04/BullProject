@@ -34,20 +34,23 @@ def placeWallsAroundTarget(grid, targetRow, targetCol):
         targetCol (int): target column to place wall
     """
     wallPositions = [
-        (targetRow-1, targetCol-1), (targetRow-1, targetCol), (targetRow-1, targetCol+1), # Top row
-        (targetRow, targetCol-1), (targetRow, targetCol+1), # Sides of wall
-        (targetRow+1, targetCol-1), (targetRow+1, targetCol), (targetRow+1, targetCol+1) # Bottom row
+        (targetRow-1, targetCol-1), (targetRow-1, targetCol), (targetRow-1, targetCol+1),  # Top row
+        (targetRow, targetCol-1),                         (targetRow, targetCol+1),  # Left and right
+        (targetRow+1, targetCol-1), (targetRow+1, targetCol), (targetRow+1, targetCol+1)  # Bottom row
     ]
     
     # Choose random wall position to leave open
-    openingIndex = random.choice([1, 3, 4, 6])  # Left, right, top, or bottom
-    corralPositions = set()  # Track the wall positions
-    for i, (r, c) in enumerate(wallPositions):
-        if i != openingIndex:
-            grid[r][c] = 1  # Value for wall
-            corralPositions.add((r, c))
+    corralWalls = set()
+    corralPositions = {(targetRow, targetCol)}  # Track the two interior cells inside the corral
 
-    return corralPositions
+    # Set the walls around the target
+    for i, (r, c) in enumerate(wallPositions):
+        if (r == targetRow-1 and c == targetCol):  # This is the opening cell
+            continue  # Leave this cell open (do not mark it as a wall)
+        grid[r][c] = 1  # Wall value
+        corralWalls.add((r, c))
+
+    return corralWalls, corralPositions
 # End placeWallsAroundTarget
 
 def placeRandomWalls(grid):
@@ -89,8 +92,14 @@ def animate(frame):
         plt.gca().figure.canvas.stop_event_loop()
         return
 
+    if robotPosition == bullPosition:
+        print("The robot has died to the bull!")
+        plt.text(0.5, 0.5, "The robot has died to the bull!", fontsize=18, ha='center', transform=plt.gcf().transFigure)
+        plt.gca().figure.canvas.stop_event_loop()
+        return
+
     # Move robot and bull
-    moveRobot(robotPosition, bullPosition, [center, center], obstacles, corralPositions)
+    moveRobot(robotPosition, bullPosition, obstacles, corralWalls, corralPositions)
     moveBull(bullPosition, robotPosition, obstacles, corralPositions)
 
     # Update bull and robot positions on the grid
@@ -119,11 +128,12 @@ def animate(frame):
 # Main function to create and animate grid with obstacles and walls
 def createAndAnimateGrid():
     # Create grid and place target
-    global grid, bullPosition, robotPosition, center, obstacles, mat, axis, corralPositions
+    global grid, bullPosition, robotPosition, center, obstacles, mat, axis, corralPositions, corralWalls
     grid = createEmptyGrid()
     center = placeTarget(grid)
      
-    corralPositions = placeWallsAroundTarget(grid, center, center)
+    corralWalls, corralPositions = placeWallsAroundTarget(grid, center, center)
+    
     placeRandomWalls(grid)
     
     # Gather all positions that are walls
