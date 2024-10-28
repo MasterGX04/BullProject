@@ -78,9 +78,10 @@ def placeRandomWalls(grid):
 # end placeRandom Walls
 
 textAnnotations = []
-
+chargingDirection = None
 # function to animate bull and robot movements
 def animate(frame):
+    global chargingDirection
     # Clear previous bull and robot positions
     grid[bullPosition[0], bullPosition[1]] = 0
     grid[robotPosition[0], robotPosition[1]] = 0
@@ -99,30 +100,37 @@ def animate(frame):
         return [text]
 
     # Move robot and bull
-    moveRobot(robotPosition, bullPosition, obstacles, corralWalls, corralPositions)
-    moveBull(bullPosition, robotPosition, obstacles, corralPositions)
 
-    # Update bull and robot positions on the grid
-    grid[bullPosition[0], bullPosition[1]] = 2
+    # Step 1: Move the robot first
+    moveRobot(robotPosition, bullPosition, obstacles, corralWalls, corralPositions)
+    
+    # Update the grid with the robot's new position before moving the bull
     grid[robotPosition[0], robotPosition[1]] = 4
     
+    # Step 2: Move the bull after the robot has moved
+    chargingDirection = moveBull(bullPosition, robotPosition, obstacles, chargingDirection)
+    
+    # Update bull's position on the grid
+    grid[bullPosition[0], bullPosition[1]] = 2
+    
+    # Update the grid display
     mat.set_data(grid)
     
-    while textAnnotations:
-        annotation = textAnnotations.pop()
-        annotation.remove()
+    # while textAnnotations:
+    #     annotation = textAnnotations.pop()
+    #     annotation.remove()
 
-    # Add emojis as text annotations on top of the grid
-    for i in range(GRID_SIZE):
-        for j in range(GRID_SIZE):
-            if grid[i][j] == 2:
-                axis.text(j, i, "🐂", ha='center', va='center', fontsize=15)
-            elif grid[i][j] == 4:
-                axis.text(j, i, "🤖", ha='center', va='center', fontsize=15)
-            elif grid[i][j] == 3:
-                axis.text(j, i, "🏁", ha='center', va='center', fontsize=15)
+    # # Add emojis as text annotations on top of the grid
+    # for i in range(GRID_SIZE):
+    #     for j in range(GRID_SIZE):
+    #         if grid[i][j] == 2:
+    #             axis.text(j, i, "🐂", ha='center', va='center', fontsize=15)
+    #         elif grid[i][j] == 4:
+    #             axis.text(j, i, "🤖", ha='center', va='center', fontsize=15)
+    #         elif grid[i][j] == 3:
+    #             axis.text(j, i, "🏁", ha='center', va='center', fontsize=15)
     
-    return [mat] + textAnnotations
+    return [mat]
 # end animate
 
 # Main function to create and animate grid with obstacles and walls

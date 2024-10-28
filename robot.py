@@ -11,7 +11,7 @@ def manhattanDistance(pos1, pos2):
 tStarCache = {}
 
 # Recursive function to compute T* for given bull and robot position
-def computeTStar(robotPosition, targetPosition, obstacles, corralPositions):
+def moveToTarget(robotPosition, targetPosition, obstacles, corralPositions):
     if robotPosition == targetPosition:
         return 0
 
@@ -53,6 +53,8 @@ def computeTStar(robotPosition, targetPosition, obstacles, corralPositions):
 
 # Movement logic for robot
 def moveRobot(robotPosition, bullPosition, obstacles, corralWalls, corralPositions):    
+    # Check if the bull is directly adjacent to the robot (danger zone)
+    bullAdjacent = bullAdjacent = (abs(bullPosition[0] - robotPosition[0]) <= 1) and (abs(bullPosition[1] - robotPosition[1]) <= 1)
     
     # Robot will move out of corral if it accidentally goes inside
     if tuple(robotPosition) in corralPositions:
@@ -67,9 +69,6 @@ def moveRobot(robotPosition, bullPosition, obstacles, corralWalls, corralPositio
                 (newRobotX, newRobotY) not in corralWalls:
                 robotPosition[0], robotPosition[1] = newRobotX, newRobotY
                 return  # Exit immediately after moving out of corral
-    
-    # Check if the bull is directly adjacent to the robot (danger zone)
-    bullAdjacent = bullAdjacent = (abs(bullPosition[0] - robotPosition[0]) <= 1) and (abs(bullPosition[1] - robotPosition[1]) <= 1)
                    
     if bullAdjacent:
         for move in DIAGONAL_MOVES:
@@ -84,12 +83,9 @@ def moveRobot(robotPosition, bullPosition, obstacles, corralWalls, corralPositio
                newPosition not in obstacles and newPosition not in corralWalls and \
                newPosition not in corralPositions and newPosition != tuple(bullPosition):
                 
-                # Additional check: Ensure the new position won’t make the robot adjacent to the bull
-                # after the diagonal move
                 if abs(newRobotX - bullPosition[0]) > 1 or abs(newRobotY - bullPosition[1]) > 1:
-                    # Apply the safe diagonal move
                     robotPosition[0], robotPosition[1] = newRobotX, newRobotY
-                    return  # Exit after making the diagonal move
+                    return
             
     # If robot is not within bull's 5x5 move towards bull
     if not isWithin5x5Square(bullPosition, robotPosition):
@@ -99,31 +95,30 @@ def moveRobot(robotPosition, bullPosition, obstacles, corralWalls, corralPositio
     
     # Calculate robot's movement strategy by trying to move towards target
     bestMove = None
-    bestTStar = float('inf')
     safeMoves = []
+    minTStar = float('inf')
     
     for move in ROBOT_MOVES:
         newRobotX = robotPosition[0] + move[0]
         newRobotY = robotPosition[1] + move[1]
         if (0 <= newRobotX < GRID_SIZE) and (0 <= newRobotY < GRID_SIZE) and \
-           (newRobotX, newRobotY) not in obstacles and (newRobotX, newRobotY) not in corralPositions:
+           (newRobotX, newRobotY) not in obstacles and (newRobotX, newRobotY) not in corralPositions and (newRobotX, newRobotY) != bullPosition:
             
-            if (newRobotX, newRobotY) != tuple(bullPosition):
-                safeMoves.append((move, newRobotX, newRobotY))
-                
-            # Compute T* for this potential move
-            tStarValue = computeTStar([newRobotX, newRobotY], target, obstacles, corralPositions)
-            #print(f'tStar Value for {move}: {tStarValue}')
-            # Track the move that minimizes T*
-            if tStarValue < bestTStar:
-                bestMove = move
-                bestTStar = tStarValue
+            if abs(newRobotX - bullPosition[0]) > 1 or abs(newRobotY - bullPosition[1]) > 1:
+                # Compute T* for this potential move
+                tStarValue = moveToTarget([newRobotX, newRobotY], target, obstacles, corralPositions)
+                safeMoves.append((move, tStarValue))
+            else:
+                tStarValue = moveToTarget([newRobotX, newRobotY], target, obstacles, corralPositions)
+                if tStarValue < minTStar:
+                    minTStar = tStarValue
+                    bestMove = move
                 
     # Apply best move if iti exists
     if safeMoves:
-        bestSafeMove = min(safeMoves, key=lambda m: computeTStar([m[1], m[2]], target, obstacles, corralPositions))
-        robotPosition[0] += bestSafeMove[0][0]
-        robotPosition[1] += bestSafeMove[0][1]
+        bestSafeMove = min(safeMoves, key=lambda m: m[1])[0]
+        robotPosition[0] += bestSafeMove[0]
+        robotPosition[1] += bestSafeMove[1]
     elif bestMove:
         # If no safe moves exist, use the best available move to minimize T*
         robotPosition[0] += bestMove[0]
