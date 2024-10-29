@@ -89,7 +89,6 @@ def moveRobot(robotPosition, bullPosition, obstacles, corralWalls, corralPositio
     # Appears that the only way to get the bull into the pen is a 50% chance after swinging the corner
     if shouldSwingCorner(robotPosition, bullPosition, corralPositions):
         swingCorner(robotPosition, corralPositions)
-        print("done")
     elif safeMoves:
         bestSafeMove = min(safeMoves, key=lambda m: computeTStar([m[1], m[2]], target, obstacles, corralPositions))
         robotPosition[0] += bestSafeMove[0][0]
