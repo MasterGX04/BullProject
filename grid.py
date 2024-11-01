@@ -6,12 +6,63 @@ from matplotlib import font_manager
 from matplotlib.widgets import Button
 from bull import moveBull
 from robot import moveRobot
-from grid_size import GRID_SIZE
+from global_functions import ROBOT_MOVES, GRID_SIZE, manhattanDistance
 
 plt.rcParams['font.family'] = 'Segoe UI Emoji'
 
 MIN_WALL_LENGTH = 1
 MAX_WALL_LENGTH = 4
+
+alpha = 0.1 # Learning rate
+gamma = 0.9 # Discount factor
+epsilon = 0.1 # Exploration rate
+Q = {}
+
+def getState(robotPosition, bullPosition):
+    return (tuple(robotPosition), tuple(bullPosition))
+# End getState
+
+def updateQTable(state, action, reward, nextState):
+    # initialize Q-values if state and action pair not inQ
+    if (state, action) not in Q:
+        Q[(state, action)] = 0
+    
+    maxQNext = max(Q.get((nextState, a), 0) for a in ROBOT_MOVES)
+    
+    # Use Q-learning rule to update Q-Value
+    Q[(state, action)] += alpha * (reward + gamma * maxQNext - Q[(state, action)])
+
+def chooseAction(state):
+    # Epislon choice
+    if random.uniform(0, 1) < epsilon:
+        return random.choice(ROBOT_MOVES)
+    else:
+        qValues = [(Q.get((state, action), 0), action) for action in ROBOT_MOVES]
+        maxQ, bestAction = max(qValues)
+        return bestAction
+# End chooseAction
+
+def calculateReward(robotPosition, bullPosition, corralCenter, corralWalls):
+    maxReward = 100
+    collisionPenalty = -50
+    stepPenalty = -1
+    corralProximityReward = 10 # Reward multiplier for getting close to corral
+    
+    distanceToCorral = manhattanDistance(bullPosition, corralCenter)
+    
+    # Goal reward if bull is in corral
+    if bullPosition == corralCenter:
+        return maxReward
+    
+    if robotPosition == bullPosition:
+        return collisionPenalty
+    
+    proximityReward = corralProximityReward / (distanceToCorral + 1)
+    
+    # Total reward from step penalty and proximity
+    totalReward = proximityReward + stepPenalty
+    return totalReward
+# End calculateReward
 
 def createEmptyGrid():
     return np.zeros((GRID_SIZE, GRID_SIZE))
@@ -23,6 +74,30 @@ def placeTarget(grid):
     grid[center][center] = 3 # Value for target
     return center
 # End placeTarget
+
+def placeRandomWalls(grid):
+    """ Places 3 to 7 random walls in the 13x13 grid
+
+    Args:
+        grid (2d array): represents 2d array of possible locations for
+        all possible world items
+    """
+    numWalls = random.randint(3, 7)
+    for _ in range(numWalls):
+        # Choose random start position and direction (Make sure to add check for starting locations)
+        startRow = random.randint(1, GRID_SIZE - 2)
+        startCol = random.randint(1, GRID_SIZE - 2)
+        wallLength = random.randint(MIN_WALL_LENGTH, MAX_WALL_LENGTH)
+        direction = random.choice([(0, 1), (1, 0)]) # Horizontal or vertical
+        
+        # Place wall
+        for i in range(wallLength):
+            newRow = startRow + i * direction[0]
+            newCol = startCol + i * direction[1]
+            if 0 <= newRow < GRID_SIZE and 0 <= newCol < GRID_SIZE:
+                if grid[newRow][newCol] == 0:
+                    grid[newRow][newCol] = 1
+# end placeRandom Walls
 
 def placeWallsAroundTarget(grid, targetRow, targetCol):
     """urround target with a wall and leave one random opening
@@ -53,54 +128,45 @@ def placeWallsAroundTarget(grid, targetRow, targetCol):
     return corralWalls, corralPositions
 # End placeWallsAroundTarget
 
-def placeRandomWalls(grid):
-    """ Places 3 to 7 random walls in the 13x13 grid
-
-    Args:
-        grid (2d array): represents 2d array of possible locations for
-        all possible world items
-    """
-    numWalls = random.randint(3, 7)
-    for _ in range(numWalls):
-        # Choose random start position and direction (Make sure to add check for starting locations)
-        startRow = random.randint(1, GRID_SIZE - 2)
-        startCol = random.randint(1, GRID_SIZE - 2)
-        wallLength = random.randint(MIN_WALL_LENGTH, MAX_WALL_LENGTH)
-        direction = random.choice([(0, 1), (1, 0)]) # Horizontal or vertical
-        
-        # Place wall
-        for i in range(wallLength):
-            newRow = startRow + i * direction[0]
-            newCol = startCol + i * direction[1]
-            if 0 <= newRow < GRID_SIZE and 0 <= newCol < GRID_SIZE:
-                if grid[newRow][newCol] == 0:
-                    grid[newRow][newCol] = 1
-# end placeRandom Walls
-
+iterationCount = 0
+successfulAttempts = 0
 textAnnotations = []
 chargingDirection = None
 # function to animate bull and robot movements
 def animate(frame):
-    global chargingDirection
+    global chargingDirection, iterationCount, successfulAttempts
     # Clear previous bull and robot positions
     grid[bullPosition[0], bullPosition[1]] = 0
     grid[robotPosition[0], robotPosition[1]] = 0
+    iterationCount += 1
 
     # Check if the bull reaches the target
     if bullPosition == [center, center]:
         print("The bull has reached the target!")
-        text = plt.text(0.5, 0.5, "The bull has reached the target!", fontsize=18, ha='center', transform=plt.gcf().transFigure)
-        plt.gca().figure.canvas.stop_event_loop()
-        return [text]
+        successfulAttempts += 1
+        print(f'Number of steps it took: {iterationCount}\nSuccessful Attempts: {successfulAttempts}')
+        iterationCount = 0
+        
+        bullPosition[:] = [0, 0] # Reset bull position
+        robotPosition[:] = [GRID_SIZE - 1, GRID_SIZE - 1]
+        grid[bullPosition[0], bullPosition[1]] = 2
+        grid[bullPosition[0], bullPosition[1]] = 4
+        grid[center, center] = 3
+        return [mat]
 
     if robotPosition == bullPosition:
         print("The robot has died to the bull!")
-        text = plt.text(0.5, 0.5, "The robot has died to the bull!", fontsize=18, ha='center', transform=plt.gcf().transFigure)
-        plt.gca().figure.canvas.stop_event_loop()
-        return [text]
+        iterationCount = 0
+        
+        bullPosition[:] = [0, 0] # Reset bull position
+        robotPosition[:] = [GRID_SIZE - 1, GRID_SIZE - 1]
+        grid[bullPosition[0], bullPosition[1]] = 2
+        grid[robotPosition[0], robotPosition[1]] = 4
+        return [mat]
 
-    # Move robot and bull
-
+    # Choose an action and move robot
+    currentState = getState(robotPosition, bullPosition)
+    action = chooseAction(currentState)
     # Step 1: Move the robot first
     moveRobot(robotPosition, bullPosition, obstacles, corralWalls, corralPositions)
     
@@ -110,26 +176,18 @@ def animate(frame):
     # Step 2: Move the bull after the robot has moved
     chargingDirection = moveBull(bullPosition, robotPosition, obstacles, chargingDirection)
     
+    # Next state and reward
+    nextState = getState(robotPosition, bullPosition)
+    reward = calculateReward(robotPosition, bullPosition, [center, center], corralWalls) # Update
+    
+    updateQTable(currentState, action, reward, nextState)
+    
     # Update bull's position on the grid
     grid[bullPosition[0], bullPosition[1]] = 2
     
     # Update the grid display
     mat.set_data(grid)
-    
-    # while textAnnotations:
-    #     annotation = textAnnotations.pop()
-    #     annotation.remove()
 
-    # # Add emojis as text annotations on top of the grid
-    # for i in range(GRID_SIZE):
-    #     for j in range(GRID_SIZE):
-    #         if grid[i][j] == 2:
-    #             axis.text(j, i, "🐂", ha='center', va='center', fontsize=15)
-    #         elif grid[i][j] == 4:
-    #             axis.text(j, i, "🤖", ha='center', va='center', fontsize=15)
-    #         elif grid[i][j] == 3:
-    #             axis.text(j, i, "🏁", ha='center', va='center', fontsize=15)
-    
     return [mat]
 # end animate
 
@@ -141,8 +199,6 @@ def createAndAnimateGrid():
     center = placeTarget(grid)
      
     corralWalls, corralPositions = placeWallsAroundTarget(grid, center, center)
-    
-    placeRandomWalls(grid)
     
     # Gather all positions that are walls
     obstacles = set((i, j) for i in range(GRID_SIZE) for j in range(GRID_SIZE) if grid[i, j] == 1)
