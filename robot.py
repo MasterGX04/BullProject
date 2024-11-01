@@ -1,17 +1,9 @@
-from grid_size import GRID_SIZE
+from global_functions import GRID_SIZE, ROBOT_MOVES, manhattanDistance
 from collections import deque
 from bull import isWithin5x5Square
 
-ROBOT_MOVES = [(0, 1), (0, -1), (1, 0), (-1, 0), (1, 1), (-1, -1), (1, -1), (-1, 1)]
-
-
-def manhattanDistance(pos1, pos2):
-    return abs(pos1[0] - pos2[0]) + abs(pos1[1] - pos2[1])
-
-
 # Cache results for computed states to avoid redundant calculations
 tStarCache = {}
-
 
 # Recursive function to compute T* for given bull and robot position
 def computeTStar(robotPosition, targetPosition, obstacles, corralPositions):
