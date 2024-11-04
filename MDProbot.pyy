@@ -1,0 +1,341 @@
+from global_functions import GRID_SIZE, BULL_MOVES
+from utils import isWithin5x5Square, placeWallsAroundTarget, manhattanDistance, placeTarget
+import numpy as np
+from collections import defaultdict
+import heapq
+import random
+from bull import moveBull
+
+ACTIONS = [(0, 1), (0, -1), (1, 0), (-1, 0), (1, 1), (-1, -1), (1, -1), (-1, 1)]  # Robot Moves
+
+class MDPGrid:
+    
+    """
+    A class representing a Markov Decision Process (MDP) grid environment 
+    where a robot tries to lure a bull into a corral while avoiding collisions.
+    """
+    
+    def __init__(self, grid_size, target_row, target_col, allRewards):
+        
+        """
+        Initializes the MDPGrid with the specified grid size and target position.
+        
+        Parameters:
+            grid_size (int): The size of the grid (width and height).
+            target_row (int): The row index for the center of the corral.
+            target_col (int): The column index for the center of the corral.
+        """
+        self.grid_size = grid_size
+        self.grid = np.zeros((grid_size, grid_size), dtype=int)
+        self.allRewards = allRewards
+        
+        # Set up target and corral walls
+        self.target_center = placeTarget(self.grid)  # Center of the target
+        self.walls, self.corral = placeWallsAroundTarget(self.grid, target_row, target_col)
+        
+        self.previous_distance_to_bull = None
+
+    def get_possible_bull_moves(self, bullPosition):
+        """
+        Returns all possible moves for the bull from its current position.
+
+        Parameters:
+            bullPosition (tuple): The current position of the bull (row, column).
+
+        Returns:
+            list: A list of tuples representing valid (row, column) positions
+                the bull can move to.
+        """
+        possible_moves = []
+        
+        for dr, dc in BULL_MOVES:
+            next_position = (bullPosition[0] + dr, bullPosition[1] + dc)
+            
+            # Check if the new position is within bounds and is a valid state
+            if self.is_valid_state(next_position):
+                possible_moves.append(next_position)
+        
+        return possible_moves
+        
+    def is_valid_state(self, state):
+        """
+        Checks if the given state is valid (i.e., not a wall).
+
+        Parameters:
+            state (tuple): A tuple representing the (row, column) of the state.
+
+        Returns:
+            bool: True if the state is valid, False otherwise.
+        """
+        row, col = state
+        return (0 <= row < self.grid_size and 
+                0 <= col < self.grid_size and 
+                self.grid[row, col] == 0)
+
+    def get_possible_actions(self, state, bull_position):
+        """
+        Parameters:
+            state (tuple): The current position of the robot (row, column).
+            bull_position (tuple): The current position of the bull (row, column).
+
+        Returns:
+            list: A list of valid actions represented as (delta_row, delta_col).
+        """
+        actions = []
+        for dr, dc in ACTIONS:
+            new_state = (state[0] + dr, state[1] + dc)
+            # Check if the new state is valid and not the same as the bull's position
+            if self.is_valid_state(new_state) and new_state != bull_position:
+                actions.append((dr, dc))  # Store deltas for easier movement
+        return actions
+
+    def reward_function(self, robotPosition, bullPosition):
+        """
+        Retrieves the precomputed reward for the given robot and bull positions.
+        """
+        return self.allRewards.get((robotPosition, bullPosition), 0)  # Default to 0 if not found
+
+    def transition(self, robotPosition, bullPosition):
+        """
+        Calculates the next state based on the robot's movement and the bull's response.
+
+        Parameters:
+            robot_position (tuple): The current position of the robot (row, column).
+            bull_position (tuple): The current position of the bull (row, column).
+
+        Returns:
+            tuple: The new positions of the robot and bull as (robot_position, bull_position).
+        """
+        """Manage state-based transition logic."""
+        # Choose target based on proximity to bull
+        if isWithin5x5Square(robotPosition, bullPosition):
+            targetPosition = self.target_center  # Move towards corral
+        else:
+            targetPosition = bullPosition  # Move towards bull
+
+        # Get possible actions for robot
+        possible_actions = self.get_possible_actions(robotPosition, bullPosition)
+        
+        # Choose action moving the robot closer to target position (bull or corral)
+        if possible_actions:
+            chosen_action = min(
+                possible_actions,
+                key=lambda action: (
+                    self.reward_function(
+                    (robotPosition[0] + action[0], robotPosition[1] + action[1]),
+                    bullPosition
+                    ) 
+                    - manhattanDistance((robotPosition[0] + action[0], robotPosition[1] + action[1]), targetPosition) * 0.1 
+                )
+            )
+            chosen_robot_position = (robotPosition[0] + chosen_action[0], robotPosition[1] + chosen_action[1])
+        else:
+            chosen_robot_position = robotPosition  # No valid moves, stay in place
+
+        # Move bull based on robot's new position
+        new_bull_position = moveBull(bullPosition, chosen_robot_position, self.walls, {self.target_center})
+
+        return chosen_robot_position, new_bull_position
+    
+    # def transition_model(self, robot_position, action, next_state):
+    #     """
+    #     Defines the transition model. Returns 1 if the action leads to the next state, else 0.
+
+    #     Parameters:
+    #         robot_position (tuple): The current position of the robot (row, column).
+    #         action (tuple): The action taken (delta_row, delta_col).
+    #         next_state (tuple): The next state to check (row, column).
+
+    #     Returns:
+    #         int: 1 if the action leads to the next state, 0 otherwise.
+    #     """
+    #     new_robot_position = (robot_position[0] + action[0], robot_position[1] + action[1])
+    #     return 1 if new_robot_position == next_state else 0
+
+    def get_neighbors(self, state):
+        """
+        Returns neighboring states for prioritized sweeping.
+        
+        Parameters:
+            state (tuple): The current state as a tuple (robot_position, bull_position).
+            
+        Returns:
+            list: A list of neighboring states represented as tuples.
+        """
+        robotPosition, bullPosition = state
+        neighbors = []
+        
+        for action in self.get_possible_actions(robotPosition, bullPosition):
+            nextRobotPosition = (robotPosition[0] + action[0], robotPosition[1] + action[1])
+            
+            if self.is_valid_state(nextRobotPosition) and nextRobotPosition != bullPosition:
+                neighbors.append((nextRobotPosition, bullPosition))
+                
+        for bullMove in self.get_possible_bull_moves(bullPosition):
+            if self.is_valid_state(bullMove) and bullMove != robotPosition:
+                neighbors.append((robotPosition, bullMove))
+        
+        return neighbors
+
+    def value_iteration(self, gamma=0.9, epsilon=1e-6):
+        """
+        Performs value iteration to find the optimal policy and value function.
+
+        Parameters:
+            gamma (float): Discount factor for future rewards (default is 0.9).
+            epsilon (float): Convergence threshold (default is 1e-6).
+
+        Returns:
+            tuple: A tuple containing the optimal policy and the value function.
+        """
+        V = defaultdict(float)
+        policy = {}
+        
+        targetPosition = self.target_center
+        
+        # Priority queue for prioritized sweeping
+        pq = []
+        heapq.heappush(pq, (0, (targetPosition, targetPosition)))
+        V[(targetPosition, targetPosition)] = 100
+
+        # Generate all valid (robot_position, bull_position) states
+        # states = [((r, c), (b_r, b_c)) for r in range(self.grid_size) for c in range(self.grid_size) 
+        #         for b_r in range(self.grid_size) for b_c in range(self.grid_size)
+        #         if self.is_valid_state((r, c)) and self.is_valid_state((b_r, b_c))]
+        
+        for neighbor in self.get_neighbors((targetPosition, targetPosition)):
+            if neighbor[0] != neighbor[1]:  # Avoid adding states where robot and bull overlap
+                heapq.heappush(pq, (0, neighbor))
+            
+        transitionCache = {}
+        bullMovesCache = defaultdict(list)
+        
+        for r in range(self.grid_size):
+            for c in range(self.grid_size):
+                for bR in range(self.grid_size):
+                    for bC in range(self.grid_size):
+                        robotPosition = (r, c)
+                        bullPosition = (bR, bC)
+                        
+                        if not (self.is_valid_state(robotPosition) and self.is_valid_state(bullPosition)):
+                            continue
+                        
+                        if robotPosition != bullPosition:
+                            transitionCache[(robotPosition, bullPosition)] = {
+                                a: (robotPosition[0] + a[0], robotPosition[1] + a[1])
+                                for a in self.get_possible_actions(robotPosition, bullPosition)
+                            }
+                        if bullPosition not in bullMovesCache:
+                            bullMovesCache[bullPosition] = self.get_possible_bull_moves(bullPosition)
+
+        # Transition cache works
+
+        while pq:
+            _, s = heapq.heappop(pq)
+            robotPosition, bullPosition = s
+            
+            if robotPosition == bullPosition:
+                continue
+            
+            v = V[s]
+            
+            # Compute expected value for each action and find max
+            maxActionValue = float('-inf')
+            
+            # check if s exists in transitionCache
+            if s in transitionCache:
+                for a, nextRobotPosition in transitionCache[s].items():
+                    expectedActionValue = 0
+                    for nextBullPosition in bullMovesCache[bullPosition]:
+                        transitionProb = 1 / len(bullMovesCache[bullPosition])
+                        reward = self.allRewards.get((nextRobotPosition, nextBullPosition), 0)
+                        
+                        expectedActionValue += transitionProb * (
+                            reward + gamma * V.get((nextRobotPosition, nextBullPosition), 0)
+                        )
+                            
+                    maxActionValue = max(maxActionValue, expectedActionValue)
+                
+            V[s] = maxActionValue
+            if abs(v - V[s]) > epsilon: # Only propogate changes above epsilon
+                for neighbor in self.get_neighbors(s):
+                    if neighbor not in V:  # Only add new states to the queue
+                        heapq.heappush(pq, (-abs(V[s] - v), neighbor))
+        # End while pq
+        
+        # print(f"Current keys in V after processing: {list(V.keys())}")
+        for s in V.keys():
+            robotPosition, bullPosition = s
+            
+            if robotPosition == bullPosition:
+                policy[s] = None
+                continue 
+            if s in transitionCache and bullPosition in bullMovesCache:
+                bestAction = max(
+                    transitionCache[s],
+                    key=lambda a: sum(
+                        (1 / len(bullMovesCache[bullPosition])) * (
+                            self.allRewards.get((transitionCache[s][a], nextBullPosition), 0) +
+                            gamma * V.get((transitionCache[s][a], nextBullPosition), 0)
+                        )
+                        for nextBullPosition in bullMovesCache[bullPosition]
+                    )
+                )
+                policy[s] = bestAction
+
+        # print(f"Policy: {list(policy)}")
+        return policy, V
+        # while True:
+        #     delta = 0
+        #     for s in states:
+        #         robotPosition, bullPosition = s
+                
+        #         # Skip target state with fixed high value
+        #         if s == (targetPosition, targetPosition):
+        #             continue
+                
+        #         v = V[s]
+                
+        #         # Compute expected values for each action and find the max
+        #         maxActionValue = float('-inf')
+        #         for a, nextRobotPosition in transitionCache[s].items():
+        #             # Use precomputed rewards directly from allRewards
+        #             expectedActionValue = 0
+        #             possibleBullPositions = self.get_possible_bull_moves(bullPosition)
+                    
+        #             for nextBullPosition in possibleBullPositions:
+        #                 transitionProb = 1 / len(possibleBullPositions)
+        #                 reward = self.allRewards.get((nextRobotPosition, nextBullPosition), 0)
+                        
+        #                 expectedActionValue += transitionProb * (
+        #                     reward + gamma * V.get((nextRobotPosition, nextBullPosition), 0)
+        #                 )
+                        
+        #             maxActionValue = max(maxActionValue, expectedActionValue)
+                
+        #         # Update the value function and delta for convergence check
+        #         V[s] = maxActionValue
+        #         delta = max(delta, abs(v - V[s]))
+
+        #     # Check for convergence
+        #     if delta < epsilon:
+        #         break
+        
+        # # Extract optimal policy
+        # policy = {}
+        # for s in states:
+        #     robotPosition, bullPosition = s
+        #     if s == (targetPosition, targetPosition):
+        #         policy[s] = None
+        #         continue
+        #     # Find the action that maximizes the expected value for each state
+        #     policy[s] = max(
+        #         transitionCache[s], 
+        #         key=lambda a: sum(
+        #             (1 / len(self.get_possible_bull_moves(bullPosition))) * (
+        #                self.allRewards.get((transitionCache[s][a], next_bull_position), 0) +
+        #             gamma * V.get((transitionCache[s][a], next_bull_position), 0)
+        #             )
+        #             for next_bull_position in self.get_possible_bull_moves(bullPosition)
+        #      )
+        #     )
