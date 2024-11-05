@@ -13,6 +13,10 @@ plt.rcParams['font.family'] = 'Segoe UI Emoji'
 alpha = 0.1  # Learning rate
 gamma = 0.9  # Discount factor
 epsilon = 0.1  # Exploration rate
+successfulAttempts = 0
+chargingDirection = None
+iterationCount = 0
+animation = None  # Placeholder for the animation instance
 Q = {}
 
 def getState(robotPosition, bullPosition):
@@ -69,10 +73,6 @@ def placeWallsAroundTarget(grid, targetRow, targetCol):
         corralWalls.add((r, c))
     return corralWalls, (targetRow, targetCol)
 
-successfulAttempts = 0
-chargingDirection = None
-iterationCount = 0
-animation = None  # Placeholder for the animation instance
 
 def animate(frame):
     global chargingDirection, iterationCount, successfulAttempts, animation
