@@ -82,6 +82,8 @@ def animate(frame):
 
     if bullPosition == [center, center]:
         print("The bull has reached the target!")
+        print("The T_star value at the start position/expected time where the Bull is at (0,0) and Robot is at (12,12):")
+        print(T_star[((0,0),(12, 12))])
         successfulAttempts += 1
         print(f'Number of steps it took: {iterationCount}')
         if animation is not None:

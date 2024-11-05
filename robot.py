@@ -4,6 +4,25 @@ from bull import isWithin5x5Square
 
 # Recursive function to compute T* for given bull and robot position
 def value_iteration(grid_size, max_iterations, threshold, corralPositions, corralWalls):
+    """    
+    Perform value iteration to compute T* (optimal values) for guiding the bull to the corral position, given
+    the initial positions of the bull and the robot. The function returns T* values and a policy that specifies
+    optimal actions from each state.
+    
+    Parameters:
+    ----------
+    grid_size (int): The size of the grid (assumed square) representing the environment.
+    max_iterations (int): The maximum number of iterations to perform for convergence.
+    threshold (float): The convergence threshold, used to stop the iteration when the maximum change in T* values falls below this value.
+    corralPositions (tuple): The coordinates of the target corral position where the bull needs to be guided.
+    corralWalls (set of tuples): A set of coordinates representing the walls surrounding the corral. These cells are inaccessible for the bull and robot.
+    Returns:
+    -------
+    T_star (dict): A dictionary mapping each state (bull position, robot position) to its T* value, representing the minimal expected number of steps to guide the bull to the corral.
+    policy (dict): A dictionary mapping each state (bull position, robot position) to an optimal action. Each action is a movement direction to guide the robot optimally based on the T* values.
+    
+    """
+    
     T_star = {}
     policy = {}
 
@@ -44,13 +63,18 @@ def value_iteration(grid_size, max_iterations, threshold, corralPositions, corra
 def calculate_expected_value(pos_B, pos_R, T_star, corralWalls):
     """
     Use to calculate the T_star and policy at a given state by using formula T_star = 1 + E[T_star(action)]
+    
     Parameters:
+    -----------
     pos_B = position of Bull
     pos_R = position of Robot
     T_star = dictionary of all T_star values for each state
     corralWalls = set of all the corral wall positions
+    
     Returns:
+    --------
     The best action and T_star value at the given state
+    
     """
     best_action = None
     best_value = float('inf')
@@ -80,6 +104,7 @@ def calculate_expected_value(pos_B, pos_R, T_star, corralWalls):
 
 
 def get_bull_moves_toward_robot(pos_B, pos_R, corralWalls):
+    
     moves = []
     # Calculate potential moves for the bull that decrease Manhattan distance to the robot
     for move in BULL_MOVES:
@@ -131,6 +156,5 @@ def extract_policy(T_star, corralWalls):
 def moveRobot(robotPosition, bullPosition, policy):
 
     pos = policy[(tuple(bullPosition), tuple(robotPosition))]
-    #print(pos)
     robotPosition[0] = pos[0]
     robotPosition[1] = pos[1]
