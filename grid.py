@@ -146,7 +146,6 @@ def placeWallsAroundTarget(grid, targetRow, targetCol):
 
 # End placeWallsAroundTarget
 
-iterationCount = 0
 successfulAttempts = 0
 textAnnotations = []
 chargingDirection = None
@@ -158,31 +157,20 @@ def animate(frame):
     # Clear previous bull and robot positions
     grid[bullPosition[0], bullPosition[1]] = 0
     grid[robotPosition[0], robotPosition[1]] = 0
-    iterationCount += 1
 
     # Check if the bull reaches the target
     if bullPosition == [center, center]:
         print("The bull has reached the target!")
         successfulAttempts += 1
         print(f'Number of steps it took: {iterationCount}\nSuccessful Attempts: {successfulAttempts}')
-        iterationCount = 0
-
-        bullPosition[:] = [0, 0]  # Reset bull position
-        robotPosition[:] = [GRID_SIZE - 1, GRID_SIZE - 1]
-        grid[bullPosition[0], bullPosition[1]] = 2
-        grid[bullPosition[0], bullPosition[1]] = 4
-        grid[center, center] = 3
+        animation.event_source.stop()
         return [mat]
 
     """
     if robotPosition == bullPosition:
         print("The robot has died to the bull!")
-        iterationCount = 0
 
-        bullPosition[:] = [0, 0]  # Reset bull position
-        robotPosition[:] = [GRID_SIZE - 1, GRID_SIZE - 1]
-        grid[bullPosition[0], bullPosition[1]] = 2
-        grid[robotPosition[0], robotPosition[1]] = 4
+        animation.event_source.stop()
         return [mat]
     """
 
